@@ -1,0 +1,25 @@
+{
+  "name": "mhndev/yii2-repository",
+  "description": "repository implementation in Yii2",
+  "type": "library",
+  "keywords": ["yii2","repository pattern","design pattern"],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "majid abdolhosseini",
+      "email": "majid8911303@gmail.com"
+    }
+  ],
+  "require": {
+    "yiisoft/yii2": "*"
+  },
+
+  "autoload": {
+    "psr-4": {
+      "mhndev\\yii2Repository\\": "src/"
+    }
+  },
+
+  "minimum-stability": "dev",
+
+}
