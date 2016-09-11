@@ -8,6 +8,7 @@
 namespace mhndev\yii2Repository;
 
 use mhndev\yii2Repository\Exceptions\RepositoryException;
+use mhndev\yii2Repository\Interfaces\iRepository;
 use yii\data\Pagination;
 use yii\db\ActiveRecord;
 use yii\db\Connection;
@@ -46,7 +47,7 @@ use yii\db\Query;
  * $posts = $postRepository->findManyWhereIn('title',['salam','salam2'], false);
  *
  * Class AbstractRepository
- * @package app\repositories
+ * @package mhndev\yii2Repository
  */
 class AbstractRepository implements iRepository
 {

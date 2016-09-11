@@ -4,7 +4,7 @@ namespace mhndev\yii2Repository\Interfaces;
 
 /**
  * Interface iRepository
- * @package app\repositories
+ * @package mhndev\yii2Repository\Interfaces
  */
 interface iRepository
 {

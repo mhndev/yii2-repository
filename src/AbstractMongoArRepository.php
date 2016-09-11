@@ -8,7 +8,9 @@
 namespace mhndev\yii2Repository;
 
 use mhndev\yii2Repository\Exceptions\RepositoryException;
+use mhndev\yii2Repository\Interfaces\iRepository;
 use MongoDB\BSON\ObjectID;
+
 use Yii;
 use yii\data\Pagination;
 use yii\mongodb\ActiveRecord;
