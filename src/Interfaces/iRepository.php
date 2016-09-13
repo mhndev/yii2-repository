@@ -49,43 +49,57 @@ interface iRepository
 
     /**
      * @param $id
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findOneById($id);
+    public function findOneById($id, $returnArray = false);
 
     /**
      * @param $key
      * @param $value
+     * @param string $operation
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findOneBy($key, $value);
+    public function findOneBy($key, $value, $operation = '=', $returnArray = false);
 
     /**
      * @param $key
      * @param $value
+     * @param string $operation
+     * @param $
+     * @param bool $withPagination
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findManyBy($key, $value);
+    public function findManyBy($key, $value, $operation = '=', $withPagination = true, $returnArray = false);
 
 
     /**
      * @param array $ids
+     * @param bool $withPagination
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findManyByIds(array $ids);
+    public function findManyByIds(array $ids, $withPagination = true, $returnArray = false);
 
     /**
+     * @param bool $withPagination
+     * @param bool $returnArray
      * @return mixed
+     * @internal param $ $
      */
-    public function findAll();
+    public function findAll($withPagination = true, $returnArray = false);
 
     /**
      * @param array $criteria
      * @param bool $withPagination
      * @param array $with
+     * @param $
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findManyByCriteria(array $criteria = [], $withPagination = true, $with = []);
+    public function findManyByCriteria(array $criteria = [], $withPagination = true, $with = [], $returnArray = false);
 
 
     /**
@@ -146,12 +160,14 @@ interface iRepository
      * @return bool
      */
     public function allExist(array $ids);
+
     /**
      * @param $key
      * @param $value
-     * @return boolean
+     * @param string $operation
+     * @return bool
      */
-    public function deleteOneBy($key, $value);
+    public function deleteOneBy($key, $value, $operation = '=');
 
     /**
      * @param array $criteria

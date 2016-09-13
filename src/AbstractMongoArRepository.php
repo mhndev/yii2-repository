@@ -62,7 +62,7 @@ class AbstractMongoArRepository implements iRepository
 
 
     const PRIMARY_KEY = '_id';
-    const APPLICATION_KEy = 'id';
+    const APPLICATION_KEY = 'id';
 
 
     /**
@@ -265,6 +265,7 @@ class AbstractMongoArRepository implements iRepository
 
     /**
      * @param array $data
+     * @return mixed|void
      * @throws RepositoryException
      */
     public function createMany(array $data)
@@ -273,6 +274,7 @@ class AbstractMongoArRepository implements iRepository
             throw new RepositoryException;
         }
 
+        /** @var ActiveRecord $modelClassName */
         $modelClassName = get_class($this->model);
 
         foreach ($data as $record){
@@ -290,7 +292,7 @@ class AbstractMongoArRepository implements iRepository
         }
 
         $this->connection->createCommand()
-            ->batchInsert($modelClassName::tableName(), $modelClassName->attributes(), $data)->execute();
+            ->batchInsert($modelClassName::collectionName(), $modelClassName->attributes(), $data)->execute();
     }
 
 
@@ -300,14 +302,15 @@ class AbstractMongoArRepository implements iRepository
      */
     protected function formatEntity($entity)
     {
-        if(in_array(self::APPLICATION_KEy, $this->columns)){
-            $entity[self::APPLICATION_KEy] = $entity[self::PRIMARY_KEY];
+        if(in_array(self::APPLICATION_KEY, $this->columns)){
+            $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY];
 
             if($entity[self::PRIMARY_KEY] instanceof ObjectID){
-                $entity[self::APPLICATION_KEy] = $entity[self::PRIMARY_KEY]->__toString();
+                $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY]->__toString();
             }
 
         }
+
 
         unset($entity[self::PRIMARY_KEY]);
 
@@ -317,70 +320,159 @@ class AbstractMongoArRepository implements iRepository
 
     /**
      * @param $id
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findOneById($id)
-    {
-        $entity = $this->connection->getCollection($this->model->collectionName())->findOne([self::PRIMARY_KEY=>$id]);
-
-        return $this->formatEntity($entity);
-    }
-
-    /**
-     * @param $key
-     * @param $value
-     * @return mixed
-     */
-    public function findOneBy($key, $value)
-    {
-        if($key == self::APPLICATION_KEy){
-            $key = self::PRIMARY_KEY;
-        }
-
-        $entity = $this->connection->getCollection($this->model->collectionName())->findOne([$key => $value]);
-
-        return $this->formatEntity($entity);
-    }
-
-    /**
-     * @param $key
-     * @param $value
-     * @return mixed
-     */
-    public function findManyBy($key, $value)
-    {
-        if($key == self::APPLICATION_KEy){
-            $key = self::PRIMARY_KEY;
-        }
-
-        $entities = $this->connection->getCollection($this->model->collectionName())->find([$key => $value]);
-
-        return $entities;
-    }
-
-    /**
-     * @param array $ids
-     * @return mixed
-     */
-    public function findManyByIds(array $ids)
-    {
-        $entities = $this->connection->getCollection($this->model->collectionName())->find([self::PRIMARY_KEY=>$ids])->toArray();
-
-        return $entities;
-    }
-
-    /**
-     * @param bool $withPagination
-     * @return mixed
-     */
-    public function findAll($withPagination = true)
+    public function findOneById($id, $returnArray = false)
     {
         foreach ($this->with as $relation){
             $this->query = $this->query->with($relation);
         }
 
+        if($returnArray){
+            $this->query->asArray()->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
+        }
 
-        $this->query = $this->query->asArray()->select($this->columns)->orderBy($this->orderBy);
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
+
+        return $this->formatEntityObject($entity);
+    }
+
+
+    /**
+     * @param $entity
+     * @return mixed
+     */
+    protected function formatEntityObject($entity)
+    {
+        $primaryKey = self::PRIMARY_KEY;
+        $appKey     = self::APPLICATION_KEY;
+
+        if(!empty($entity->{$primaryKey}) ){
+
+            if($entity->{$primaryKey} instanceof ObjectID){
+                $entity->{$primaryKey} = $entity->{$primaryKey}->__toString();
+            }
+
+            $entity->{$appKey} = $entity->{$primaryKey};
+            unset($entity->{$primaryKey});
+        }
+
+        return $entity;
+    }
+
+
+    /**
+     * @param array $entities
+     * @return array
+     */
+    protected function formatEntitiesObject(array $entities)
+    {
+        $result = [];
+
+
+        foreach ($entities as $entity){
+            if(!in_array(self::APPLICATION_KEY, $this->columns)){
+
+                unset($entity->{self::PRIMARY_KEY});
+            }
+            $model = $this->formatEntityObject($entity);
+
+            $result[] = $model;
+        }
+
+        return $result;
+    }
+
+
+    /**
+     * @param $key
+     * @param $value
+     * @param string $operation
+     * @param bool $returnArray
+     * @return mixed
+     */
+    public function findOneBy($key, $value, $operation = '=', $returnArray = false)
+    {
+        foreach ($this->with as $relation){
+            $this->query = $this->query->with($relation);
+        }
+
+        $condition = ($operation == '=') ? [$key => $value] : [$operation, $key ,$value];
+
+        if($returnArray){
+            return $this->query->asArray()->where($condition)->one();
+        }
+
+        return $this->query->where($condition)->one();
+    }
+
+
+    /**
+     * @param $key
+     * @param $value
+     * @param string $operation
+     * @param bool $withPagination
+     * @param bool $returnArray
+     * @return mixed
+     */
+    public function findManyBy($key, $value, $operation = '=', $withPagination = true, $returnArray = false)
+    {
+        foreach ($this->with as $relation){
+            $this->query = $this->query->with($relation);
+        }
+
+        if($returnArray){
+            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
+        }
+        else{
+            $this->query = $this->model->find()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
+        }
+
+        return $withPagination ? $this->paginate() : $this->formatEntityObject($this->query->all() );
+    }
+
+    /**
+     * @param array $ids
+     * @param bool $withPagination
+     * @param bool $returnArray
+     * @return mixed
+     */
+    public function findManyByIds(array $ids, $withPagination = true, $returnArray = false)
+    {
+        foreach ($this->with as $relation){
+            $this->query = $this->query->with($relation);
+        }
+
+        if($returnArray){
+            $this->query = $this->model->find()->asArray()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
+
+        }
+        else{
+            $this->query = $this->model->find()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
+
+        }
+
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
+    }
+
+    /**
+     * @param bool $withPagination
+     * @param bool $returnArray
+     * @return mixed
+     */
+    public function findAll($withPagination = true, $returnArray = false)
+    {
+        foreach ($this->with as $relation){
+            $this->query = $this->query->with($relation);
+        }
+
+        if($returnArray){
+            $this->query = $this->query->asArray()->select($this->columns)->orderBy($this->orderBy);
+        }
+        else{
+            $this->query = $this->query->select($this->columns)->orderBy($this->orderBy);
+        }
 
         if($withPagination){
             return $this->paginate();
@@ -393,6 +485,10 @@ class AbstractMongoArRepository implements iRepository
     }
 
 
+    /**
+     * @param array $entities
+     * @return array
+     */
     protected function formatEntities(array $entities)
     {
         $result = [];
@@ -421,7 +517,8 @@ class AbstractMongoArRepository implements iRepository
             ->limit($pagination->limit)
             ->all();
 
-        $response['items'] = $this->formatEntities($result);
+        $response['items'] = $this->formatEntitiesObject($result);
+
         $response['_meta']['totalCount'] = $count;
         $response['_meta']['pageCount'] = floor($count / $pagination->limit )+ 1;
         $response['_meta']['currentPage'] = !empty($_GET['page']) ? $_GET['page'] : 1;
@@ -433,14 +530,14 @@ class AbstractMongoArRepository implements iRepository
     }
 
 
-
     /**
      * @param array $criteria
      * @param bool $withPagination
      * @param array $with
+     * @param bool $returnArray
      * @return mixed
      */
-    public function findManyByCriteria(array $criteria = [], $withPagination = true, $with = [])
+    public function findManyByCriteria(array $criteria = [], $withPagination = true, $with = [], $returnArray = false)
     {
         $mainCriteria = [];
 
@@ -476,9 +573,14 @@ class AbstractMongoArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        $this->query = $this->query->where($mainCriteria)->asArray()->select($this->columns)->orderBy($this->orderBy);
+        if($returnArray){
+            $this->query = $this->query->where($mainCriteria)->asArray()->select($this->columns)->orderBy($this->orderBy);
+        }
+        else{
+            $this->query = $this->query->where($mainCriteria)->select($this->columns)->orderBy($this->orderBy);
+        }
 
-        return $withPagination ? $this->paginate() : $this->query->all();
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }
 
 
@@ -517,7 +619,7 @@ class AbstractMongoArRepository implements iRepository
      */
     public function updateOneBy($key, $value, array $data = [])
     {
-        if($key == self::APPLICATION_KEy){
+        if($key == self::APPLICATION_KEY){
             $key = self::PRIMARY_KEY;
         }
 
@@ -547,7 +649,7 @@ class AbstractMongoArRepository implements iRepository
      */
     public function updateManyBy($key, $value, array $data = [], $operation = '=')
     {
-        if($key == self::APPLICATION_KEy){
+        if($key == self::APPLICATION_KEY){
             $key = self::PRIMARY_KEY;
         }
 
@@ -600,15 +702,18 @@ class AbstractMongoArRepository implements iRepository
     /**
      * @param $key
      * @param $value
-     * @return boolean
+     * @param string $operation
+     * @return bool
      */
-    public function deleteOneBy($key, $value)
+    public function deleteOneBy($key, $value, $operation = '=')
     {
-        if($key == self::APPLICATION_KEy){
+        if($key == self::APPLICATION_KEY){
             $key = self::PRIMARY_KEY;
         }
 
-        $entity = $this->model->findOne([$key=>$value]);
+        $condition = ($operation == '=') ? [$key => $value] : [$operation, $key ,$value];
+
+        $entity = $this->model->findOne([$condition]);
 
         return $entity->delete();
     }
@@ -632,7 +737,7 @@ class AbstractMongoArRepository implements iRepository
      */
     public function deleteManyBy($key, $value, $operation = '=')
     {
-        if($key == self::APPLICATION_KEy){
+        if($key == self::APPLICATION_KEY){
             $key = self::PRIMARY_KEY;
         }
 
@@ -679,7 +784,7 @@ class AbstractMongoArRepository implements iRepository
             foreach ($search as $string){
                 $components = explode(':', $string);
 
-                if($components[0] == self::APPLICATION_KEy){
+                if($components[0] == self::APPLICATION_KEY){
                     $components[0] = self::PRIMARY_KEY;
                 }
                 array_push($criteria ,[$components[1],$components[0],$components[2]]);
