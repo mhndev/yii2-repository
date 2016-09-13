@@ -49,7 +49,7 @@ use yii\db\Query;
  * Class AbstractRepository
  * @package mhndev\yii2Repository
  */
-class AbstractRepository implements iRepository
+class AbstractSqlArRepository implements iRepository
 {
 
 
