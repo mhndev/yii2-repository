@@ -42,13 +42,13 @@ to the require section of your `composer.json` file.
 ### mhndev\yii2Repository\Interfaces\iRepository
 
 ```php
-    with(array $with = []);
+    public function with(array $with = []);
 
-    columns(array $columns = ['*']);
+    public function columns(array $columns = ['*']);
 
-    limit($limit = 10);
+    public function limit($limit = 10);
 
-    orderBy($orderBy, $sort = 'DESC');
+    public function orderBy($orderBy, $sort = 'DESC');
 
     public function create(array $data);
 
@@ -201,7 +201,7 @@ Yii::$container->set('postRepository', function($container, $params, $config){
 
  ```
  
- ### Repository Sample Usage
+### Repository Sample Usage
  
  sample usage which I show by using a controller.
  
