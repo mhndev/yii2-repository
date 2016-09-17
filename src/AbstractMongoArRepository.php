@@ -56,15 +56,6 @@ use yii\mongodb\Query;
  */
 class AbstractMongoArRepository implements iRepository
 {
-
-    const desc = 'DESC';
-    const asc  = 'ASC';
-
-
-    const PRIMARY_KEY = '_id';
-    const APPLICATION_KEY = 'id';
-
-
     /**
      * @var ActiveRecord
      */
@@ -132,6 +123,24 @@ class AbstractMongoArRepository implements iRepository
     }
 
 
+
+    /**
+     * @param $returnArray
+     * @param $columns
+     */
+    protected function initFetch($returnArray, $columns)
+    {
+        if($columns != ['*']){
+            $this->query->select($columns);
+        }
+
+        if($returnArray){
+            $this->query->asArray();
+        }
+    }
+
+
+
     /**
      * @return ActiveRecord
      */
@@ -168,12 +177,7 @@ class AbstractMongoArRepository implements iRepository
             throw new RepositoryException;
         }
 
-        if($columns == ['*']){
-            $this->columns = $this->model->attributes();
-        }
-        else{
-            $this->columns = $columns;
-        }
+        $this->columns = $columns;
 
         return $this;
     }
@@ -329,11 +333,8 @@ class AbstractMongoArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query->asArray()->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
-        }
-
-        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
+        $this->initFetch($returnArray, $this->columns);
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
 
         return $this->formatEntityObject($entity);
     }
@@ -400,9 +401,7 @@ class AbstractMongoArRepository implements iRepository
 
         $condition = ($operation == '=') ? [$key => $value] : [$operation, $key ,$value];
 
-        if($returnArray){
-            return $this->query->asArray()->where($condition)->one();
-        }
+        $this->initFetch($returnArray, $this->columns);
 
         return $this->query->where($condition)->one();
     }
@@ -422,12 +421,8 @@ class AbstractMongoArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->model->find()->where([$operation, $key , $value])->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->formatEntityObject($this->query->all() );
     }
@@ -444,14 +439,8 @@ class AbstractMongoArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
-
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
-
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->model->find()->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }
@@ -467,21 +456,10 @@ class AbstractMongoArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->query->asArray()->select($this->columns)->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->query->select($this->columns)->orderBy($this->orderBy);
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->query->orderBy($this->orderBy);
 
-        if($withPagination){
-            return $this->paginate();
-        }
-
-        else{
-            return $this->formatEntities($this->query->all());
-        }
-
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }
 
 
@@ -572,13 +550,9 @@ class AbstractMongoArRepository implements iRepository
         foreach ($this->with as $relation){
             $this->query = $this->query->with($relation);
         }
+        $this->initFetch($returnArray, $this->columns);
 
-        if($returnArray){
-            $this->query = $this->query->where($mainCriteria)->asArray()->select($this->columns)->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->query->where($mainCriteria)->select($this->columns)->orderBy($this->orderBy);
-        }
+        $this->query = $this->query->where($mainCriteria)->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }

@@ -5,10 +5,9 @@
  * Date: 9/5/16
  * Time: 10:02 AM
  */
-namespace mhndev\yii2Repository;
+namespace mhndev\yii2Repository\Traits;
 
 use mhndev\yii2Repository\Exceptions\RepositoryException;
-use mhndev\yii2Repository\Interfaces\iRepository;
 use yii\data\Pagination;
 use yii\db\ActiveRecord;
 use yii\db\Connection;
@@ -46,15 +45,21 @@ use yii\db\Query;
  *
  * $posts = $postRepository->findManyWhereIn('title',['salam','salam2'], false);
  *
- * Class AbstractRepository
+ * trait SqlArRepositoryTrait
  * @package mhndev\yii2Repository
  */
-class AbstractSqlArRepository implements iRepository
+trait SqlArRepositoryTrait
 {
     /**
      * @var Connection
      */
     protected $connection;
+
+
+    /**
+     * @var string
+     */
+    public $modelClass;
 
     /**
      * @var ActiveRecord
@@ -98,23 +103,29 @@ class AbstractSqlArRepository implements iRepository
     protected $offset = 0;
 
 
-
     /**
-     * AbstractRepository constructor.
-     * @param ActiveRecord $model
+     * @throws RepositoryException
      */
-    public function __construct(ActiveRecord $model)
+    public function init()
     {
-        $this->model = $model;
+        if($this->model){
+            return;
+        }
 
-        $this->connection = \Yii::$app->db;
+        if(empty($this->modelClass)){
+            throw new RepositoryException('what the f ...');
+        }
+
+        $this->model = new $this->modelClass;
 
         $this->columns();
+
         $this->orderBy(self::PRIMARY_KEY, self::desc);
 
-
+        $this->connection = \Yii::$app->db;
         $this->query = $this->model->find();
     }
+
 
     /**
      * @return ActiveRecord
@@ -281,11 +292,8 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query->asArray()->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
-        }
-
-        return $this->query->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
+        $this->initFetch($returnArray, $this->columns);
+        return $this->query->where([self::PRIMARY_KEY=>$id])->one();
     }
 
     /**
@@ -300,10 +308,7 @@ class AbstractSqlArRepository implements iRepository
         foreach ($this->with as $relation){
             $this->query = $this->query->with($relation);
         }
-
-        if($returnArray){
-            return $this->query->asArray()->where([$operation, $key ,$value])->one();
-        }
+        $this->initFetch($returnArray, $this->columns);
 
         return $this->query->where([$operation, $key ,$value])->one();
     }
@@ -322,12 +327,8 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->query->where([$operation, $key , $value])->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->query->all();
     }
@@ -344,14 +345,8 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
-
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
-
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->query->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->query->all();
     }
@@ -370,12 +365,8 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$field => $values])->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([$field => $values])->orderBy($this->orderBy);
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->query->where([$field => $values])->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->query->all();
     }
@@ -410,6 +401,22 @@ class AbstractSqlArRepository implements iRepository
         return $response;
     }
 
+
+    /**
+     * @param $returnArray
+     * @param $columns
+     */
+    protected function initFetch($returnArray, $columns)
+    {
+        if($columns != ['*']){
+            $this->query->select($columns);
+        }
+
+        if($returnArray){
+            $this->query->asArray();
+        }
+    }
+
     /**
      * @param bool $withPagination
      * @param bool $returnArray
@@ -421,13 +428,9 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->query->asArray()->select($this->columns)->orderBy($this->orderBy);
+        $this->initFetch($returnArray, $this->columns);
 
-        }
-        else{
-            $this->query = $this->query->select($this->columns)->orderBy($this->orderBy);
-        }
+        $this->query = $this->query->orderBy($this->orderBy);
 
         return $withPagination ? $this->paginate() : $this->query->all();
     }
@@ -448,11 +451,9 @@ class AbstractSqlArRepository implements iRepository
             $this->query = $this->query->with($relation);
         }
 
-        if($returnArray){
-            $this->query = $this->query->where($criteria)->asArray()->select($this->columns)->orderBy($this->orderBy);
-        }else{
-            $this->query = $this->query->where($criteria)->select($this->columns)->orderBy($this->orderBy);
-        }
+        $this->initFetch($returnArray, $this->columns);
+        $this->query = $this->query->where($criteria)->orderBy($this->orderBy);
+
 
         return $withPagination ? $this->paginate() : $this->query->all();
     }
@@ -670,7 +671,6 @@ class AbstractSqlArRepository implements iRepository
             $with = explode(',',$_GET['with']);
             $this->with($with);
         }
-
 
 
         if(!empty($search)){

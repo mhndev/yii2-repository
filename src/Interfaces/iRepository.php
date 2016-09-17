@@ -8,6 +8,16 @@ namespace mhndev\yii2Repository\Interfaces;
  */
 interface iRepository
 {
+
+    const desc = 'DESC';
+
+    const asc  = 'ASC';
+
+    const PRIMARY_KEY = '_id';
+
+    const APPLICATION_KEY = 'id';
+
+
     /**
      * @param array $with
      * @return $this

@@ -2,17 +2,18 @@
 /**
  * Created by PhpStorm.
  * User: majid
- * Date: 9/5/16
- * Time: 10:02 AM
+ * Date: 9/7/16
+ * Time: 9:37 PM
  */
-namespace mhndev\yii2Repository;
+namespace mhndev\yii2Repository\Traits;
 
 use mhndev\yii2Repository\Exceptions\RepositoryException;
-use mhndev\yii2Repository\Interfaces\iRepository;
+use MongoDB\BSON\ObjectID;
+use Yii;
 use yii\data\Pagination;
-use yii\db\ActiveRecord;
-use yii\db\Connection;
-use yii\db\Query;
+use yii\mongodb\ActiveRecord;
+use yii\mongodb\Connection;
+use yii\mongodb\Query;
 
 /**
  * Sample usage
@@ -46,25 +47,23 @@ use yii\db\Query;
  *
  * $posts = $postRepository->findManyWhereIn('title',['salam','salam2'], false);
  *
- * Class AbstractRepository
+ *
+ *
+ * trait MongoArRepositoryTrait
  * @package mhndev\yii2Repository
  */
-class AbstractSqlArRepository implements iRepository
+trait MongoArRepositoryTrait
 {
-    /**
-     * @var Connection
-     */
-    protected $connection;
-
     /**
      * @var ActiveRecord
      */
     protected $model;
 
+
     /**
-     * @var Query
+     * @var string
      */
-    protected $query;
+    public $modelClass;
 
     /**
      * @var array $data
@@ -83,9 +82,9 @@ class AbstractSqlArRepository implements iRepository
     protected $columns = ['*'];
 
     /**
-     * @var array|string
+     * @var string
      */
-    protected $orderBy = [self::PRIMARY_KEY => self::desc];
+    protected $orderBy;
 
     /**
      * @var int
@@ -98,23 +97,64 @@ class AbstractSqlArRepository implements iRepository
     protected $offset = 0;
 
 
+    /**
+     * @var Query
+     */
+    protected $query;
+
 
     /**
-     * AbstractRepository constructor.
-     * @param ActiveRecord $model
+     * @var Connection
      */
-    public function __construct(ActiveRecord $model)
-    {
-        $this->model = $model;
+    protected $connection;
 
-        $this->connection = \Yii::$app->db;
+
+
+    /**
+     * @throws RepositoryException
+     */
+    public function init()
+    {
+        if($this->model){
+            return;
+        }
+
+        if(empty($this->modelClass)){
+            throw new RepositoryException('what the f ...');
+        }
+
 
         $this->columns();
         $this->orderBy(self::PRIMARY_KEY, self::desc);
 
-
+        $this->model = new $this->modelClass;
+        $this->connection = \Yii::$app->db;
         $this->query = $this->model->find();
     }
+
+
+    /**
+     * @param $returnArray
+     * @param $columns
+     * @param $with
+     */
+    protected function initFetch($returnArray, $columns, $with)
+    {
+        foreach ($with as $relation){
+            $this->query = $this->query->with($relation);
+        }
+
+
+        if($columns != ['*']){
+            $this->query->select($columns);
+        }
+
+        if($returnArray){
+            $this->query->asArray();
+        }
+    }
+
+
 
     /**
      * @return ActiveRecord
@@ -123,6 +163,7 @@ class AbstractSqlArRepository implements iRepository
     {
         return $this->model;
     }
+
 
     /**
      * @param array $with
@@ -151,7 +192,9 @@ class AbstractSqlArRepository implements iRepository
             throw new RepositoryException;
         }
 
-        $this->columns = $columns;
+        else{
+            $this->columns = $columns;
+        }
 
         return $this;
     }
@@ -207,7 +250,7 @@ class AbstractSqlArRepository implements iRepository
                 throw new RepositoryException;
             }
 
-            $this->orderBy = [$orderBy => 'SORT_'.$sort];
+            $this->orderBy = [$orderBy .' '. $sort];
         }
 
         else{
@@ -231,10 +274,13 @@ class AbstractSqlArRepository implements iRepository
      */
     public function create(array $data)
     {
-        $this->model->setAttributes($data);
+        foreach($data as $key => $value){
+            $this->model->{$key} = $value;
+        }
+
         $this->model->save();
 
-        return $this->model;
+        return $this->formatEntity($this->model);
     }
 
 
@@ -249,6 +295,7 @@ class AbstractSqlArRepository implements iRepository
             throw new RepositoryException;
         }
 
+        /** @var ActiveRecord $modelClassName */
         $modelClassName = get_class($this->model);
 
         foreach ($data as $record){
@@ -266,7 +313,31 @@ class AbstractSqlArRepository implements iRepository
         }
 
         $this->connection->createCommand()
-            ->batchInsert($modelClassName::tableName(), $modelClassName->attributes(), $data)->execute();
+            ->batchInsert($modelClassName::collectionName(), $modelClassName->attributes(), $data)->execute();
+    }
+
+
+    /**
+     * @param $entity
+     * @return mixed
+     */
+    protected function formatEntity($entity)
+    {
+        if(in_array(self::APPLICATION_KEY, $this->model->attributes())){
+
+
+            $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY];
+
+            if($entity[self::PRIMARY_KEY] instanceof ObjectID){
+                $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY]->__toString();
+            }
+
+        }
+
+
+        unset($entity[self::PRIMARY_KEY]);
+
+        return $entity;
     }
 
 
@@ -277,16 +348,58 @@ class AbstractSqlArRepository implements iRepository
      */
     public function findOneById($id, $returnArray = false)
     {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
+        $this->initFetch($returnArray, $this->columns, $this->with);
 
-        if($returnArray){
-            $this->query->asArray()->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
-        }
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
 
-        return $this->query->where([self::PRIMARY_KEY=>$id])->select($this->columns)->one();
+        return $this->formatEntityObject($entity);
     }
+
+
+    /**
+     * @param $entity
+     * @return mixed
+     */
+    protected function formatEntityObject($entity)
+    {
+        $primaryKey = self::PRIMARY_KEY;
+        $appKey     = self::APPLICATION_KEY;
+
+        if(!empty($entity->{$primaryKey}) ){
+
+            if($entity->{$primaryKey} instanceof ObjectID){
+                $entity->{$primaryKey} = $entity->{$primaryKey}->__toString();
+            }
+
+            $entity->{$appKey} = $entity->{$primaryKey};
+            unset($entity->{$primaryKey});
+        }
+
+        return $entity;
+    }
+
+
+    /**
+     * @param array $entities
+     * @return array
+     */
+    protected function formatEntitiesObject(array $entities)
+    {
+        $result = [];
+
+        foreach ($entities as $entity){
+            if(!in_array(self::APPLICATION_KEY, $this->model->attributes())){
+
+                unset($entity->{self::PRIMARY_KEY});
+            }
+            $model = $this->formatEntityObject($entity);
+
+            $result[] = $model;
+        }
+
+        return $result;
+    }
+
 
     /**
      * @param $key
@@ -297,16 +410,12 @@ class AbstractSqlArRepository implements iRepository
      */
     public function findOneBy($key, $value, $operation = '=', $returnArray = false)
     {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
+        $this->initFetch($returnArray, $this->columns, $this->with);
+        $condition = ($operation == '=') ? [$key => $value] : [$operation, $key ,$value];
 
-        if($returnArray){
-            return $this->query->asArray()->where([$operation, $key ,$value])->one();
-        }
-
-        return $this->query->where([$operation, $key ,$value])->one();
+        return $this->query->where($condition)->one();
     }
+
 
     /**
      * @param $key
@@ -318,18 +427,11 @@ class AbstractSqlArRepository implements iRepository
      */
     public function findManyBy($key, $value, $operation = '=', $withPagination = true, $returnArray = false)
     {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
+        $this->initFetch($returnArray, $this->columns, $this->with);
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([$operation, $key , $value])->orderBy($this->orderBy);
-        }
+        $this->query = $this->query->where([$operation, $key , $value])->orderBy($this->orderBy);
 
-        return $withPagination ? $this->paginate() : $this->query->all();
+        return $withPagination ? $this->paginate() : $this->formatEntityObject($this->query->all() );
     }
 
     /**
@@ -340,46 +442,41 @@ class AbstractSqlArRepository implements iRepository
      */
     public function findManyByIds(array $ids, $withPagination = true, $returnArray = false)
     {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
+        $this->initFetch($returnArray, $this->columns, $this->with);
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
+        $this->query = $this->query->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
 
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
+    }
 
-        }
+    /**
+     * @param bool $withPagination
+     * @param bool $returnArray
+     * @return mixed
+     */
+    public function findAll($withPagination = true, $returnArray = false)
+    {
+        $this->initFetch($returnArray, $this->columns, $this->with);
 
-        return $withPagination ? $this->paginate() : $this->query->all();
+        $this->query = $this->query->orderBy($this->orderBy);
+
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }
 
 
     /**
-     * @param $field
-     * @param array $values
-     * @param bool $withPagination
-     * @param bool $returnArray
+     * @param array $entities
      * @return array
      */
-    public function findManyWhereIn($field, array $values, $withPagination = true, $returnArray = false)
+    protected function formatEntities(array $entities)
     {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
+        $result = [];
+        foreach ($entities as $item){
+            $result[] = $this->formatEntity($item);
         }
 
-        if($returnArray){
-            $this->query = $this->model->find()->asArray()->select($this->columns)->where([$field => $values])->orderBy($this->orderBy);
-        }
-        else{
-            $this->query = $this->model->find()->select($this->columns)->where([$field => $values])->orderBy($this->orderBy);
-        }
-
-        return $withPagination ? $this->paginate() : $this->query->all();
+        return $result;
     }
-
 
     /**
      * @param int $perPage
@@ -399,7 +496,8 @@ class AbstractSqlArRepository implements iRepository
             ->limit($pagination->limit)
             ->all();
 
-        $response['items'] = $result;
+        $response['items'] = $this->formatEntitiesObject($result);
+
         $response['_meta']['totalCount'] = $count;
         $response['_meta']['pageCount'] = floor($count / $pagination->limit )+ 1;
         $response['_meta']['currentPage'] = !empty($_GET['page']) ? $_GET['page'] : 1;
@@ -410,27 +508,6 @@ class AbstractSqlArRepository implements iRepository
         return $response;
     }
 
-    /**
-     * @param bool $withPagination
-     * @param bool $returnArray
-     * @return mixed
-     */
-    public function findAll($withPagination = true, $returnArray = false)
-    {
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
-
-        if($returnArray){
-            $this->query = $this->query->asArray()->select($this->columns)->orderBy($this->orderBy);
-
-        }
-        else{
-            $this->query = $this->query->select($this->columns)->orderBy($this->orderBy);
-        }
-
-        return $withPagination ? $this->paginate() : $this->query->all();
-    }
 
     /**
      * @param array $criteria
@@ -441,45 +518,44 @@ class AbstractSqlArRepository implements iRepository
      */
     public function findManyByCriteria(array $criteria = [], $withPagination = true, $with = [], $returnArray = false)
     {
-        if(depth($criteria) > 1)
-            array_unshift($criteria, 'and');
+        $mainCriteria = [];
 
-        foreach ($this->with as $relation){
-            $this->query = $this->query->with($relation);
-        }
+        if(depth($criteria) > 1){
 
-        if($returnArray){
-            $this->query = $this->query->where($criteria)->asArray()->select($this->columns)->orderBy($this->orderBy);
+            if(count($criteria) > 1 ){
+                array_unshift($mainCriteria, 'and');
+            }
+
+            foreach ($criteria as $condition){
+                if($condition[0] == '='){
+                    array_push($mainCriteria, [$condition[1] => $condition[2]]);
+                }
+                else{
+                    array_push($mainCriteria, $condition);
+                }
+            }
+
         }else{
-            $this->query = $this->query->where($criteria)->select($this->columns)->orderBy($this->orderBy);
+            if($criteria[0] == '='){
+                array_push($mainCriteria, [$criteria[1] => $criteria[2]]);
+            }else{
+                $mainCriteria = $criteria;
+            }
         }
 
-        return $withPagination ? $this->paginate() : $this->query->all();
+
+        if(count($mainCriteria) == 1 && depth($mainCriteria) > 1){
+            $mainCriteria = $mainCriteria[0];
+        }
+
+        $this->initFetch($returnArray, $this->columns, $this->with);
+
+
+        $this->query = $this->query->where($mainCriteria)->orderBy($this->orderBy);
+
+        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
     }
 
-    /**
-     * @param $id
-     * @param $field
-     * @param int $count
-     */
-    public function inc($id, $field, $count = 1)
-    {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
-
-        $entity->updateCounters([$field => $count]);
-    }
-
-    /**
-     * @param $id
-     * @param $field
-     * @param int $count
-     */
-    public function dec($id, $field, $count = -1)
-    {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
-
-        $entity->updateCounters([$field => $count]);
-    }
 
     /**
      * @param ActiveRecord $entity
@@ -494,37 +570,41 @@ class AbstractSqlArRepository implements iRepository
         return $entity;
     }
 
+
+
     /**
      * @param $id
      * @param array $data
-     * @return mixed
+     * @return boolean
      */
     public function updateOneById($id, array $data = [])
     {
         $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
 
         return $this->updateEntity($entity, $data);
-
     }
 
     /**
      * @param $key
      * @param $value
      * @param array $data
-     * @return mixed
+     * @return boolean
      */
     public function updateOneBy($key, $value, array $data = [])
     {
+        if($key == self::APPLICATION_KEY){
+            $key = self::PRIMARY_KEY;
+        }
+
         $entity = $this->makeQuery()->findOne([ $key => $value ]);
 
         return $this->updateEntity($entity, $data);
-
     }
 
     /**
      * @param array $criteria
      * @param array $data
-     * @return mixed
+     * @return boolean
      */
     public function updateOneByCriteria(array $criteria, array $data = [])
     {
@@ -533,23 +613,26 @@ class AbstractSqlArRepository implements iRepository
         return $this->updateEntity($entity, $data);
     }
 
-
     /**
      * @param $key
      * @param $value
      * @param array $data
      * @param string $operation
-     * @return int number of records updated
+     * @return bool
      */
     public function updateManyBy($key, $value, array $data = [], $operation = '=')
     {
+        if($key == self::APPLICATION_KEY){
+            $key = self::PRIMARY_KEY;
+        }
+
         return $this->model->updateAll($data, [$operation, $key, $value]);
     }
 
     /**
      * @param array $criteria
      * @param array $data
-     * @return int number of records updated
+     * @return boolean
      */
     public function updateManyByCriteria(array $criteria = [], array $data = [])
     {
@@ -562,13 +645,23 @@ class AbstractSqlArRepository implements iRepository
     /**
      * @param array $ids
      * @param array $data
-     * @return int number of records updated
+     * @return bool
      */
     public function updateManyByIds(array $ids, array $data = [])
     {
         return $this->model->updateAll($data, ['in', self::PRIMARY_KEY, $ids]);
     }
 
+    /**
+     * @param $id
+     * @return boolean
+     */
+    public function deleteOneById($id)
+    {
+        $entity = $this->model->findOne([self::PRIMARY_KEY=>$id]);
+
+        return $entity->delete();
+    }
 
     /**
      * @param array $ids
@@ -580,33 +673,27 @@ class AbstractSqlArRepository implements iRepository
     }
 
     /**
-     * @param $id
-     * @return boolean|integer number of rows deleted
-     */
-    public function deleteOneById($id)
-    {
-        $entity = $this->model->findOne([self::PRIMARY_KEY=>$id]);
-
-        return $entity->delete();
-    }
-
-
-    /**
      * @param $key
      * @param $value
      * @param string $operation
-     * @return bool|int number of rows deleted
+     * @return bool
      */
     public function deleteOneBy($key, $value, $operation = '=')
     {
-        $entity = $this->model->findOne([$operation, $key, $value]);
+        if($key == self::APPLICATION_KEY){
+            $key = self::PRIMARY_KEY;
+        }
+
+        $condition = ($operation == '=') ? [$key => $value] : [$operation, $key ,$value];
+
+        $entity = $this->model->findOne([$condition]);
 
         return $entity->delete();
     }
 
     /**
      * @param array $criteria
-     * @return boolean|integer number of rows deleted
+     * @return boolean
      */
     public function deleteOneByCriteria(array $criteria = [])
     {
@@ -619,16 +706,20 @@ class AbstractSqlArRepository implements iRepository
      * @param $key
      * @param $value
      * @param string $operation
-     * @return bool|int number of rows deleted
+     * @return bool
      */
     public function deleteManyBy($key, $value, $operation = '=')
     {
+        if($key == self::APPLICATION_KEY){
+            $key = self::PRIMARY_KEY;
+        }
+
         return  $this->model->deleteAll([$operation, $key, $value]);
     }
 
     /**
      * @param array $criteria
-     * @return boolean|integer number of rows deleted
+     * @return boolean
      */
     public function deleteManyByCriteria(array $criteria = [])
     {
@@ -637,18 +728,6 @@ class AbstractSqlArRepository implements iRepository
 
         return $this->model->deleteAll($criteria);
     }
-
-
-
-    /**
-     * @param array $ids
-     * @return boolean|integer number of rows deleted
-     */
-    public function deleteManyByIds(array $ids)
-    {
-        return $this->model->deleteAll(['in', self::PRIMARY_KEY, $ids]);
-    }
-
 
     /**
      * @return mixed
@@ -678,6 +757,9 @@ class AbstractSqlArRepository implements iRepository
             foreach ($search as $string){
                 $components = explode(':', $string);
 
+                if($components[0] == self::APPLICATION_KEY){
+                    $components[0] = self::PRIMARY_KEY;
+                }
                 array_push($criteria ,[$components[1],$components[0],$components[2]]);
             }
 
@@ -689,5 +771,36 @@ class AbstractSqlArRepository implements iRepository
 
     }
 
+    /**
+     * @param array $ids
+     * @return mixed
+     */
+    public function deleteManyByIds(array $ids)
+    {
+        return $this->model->deleteAll(['in', self::PRIMARY_KEY, $ids]);
+    }
 
+    /**
+     * @param $id
+     * @param $field
+     * @param int $count
+     */
+    public function inc($id, $field, $count = 1)
+    {
+        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+
+        $entity->updateCounters([$field => $count]);
+    }
+
+    /**
+     * @param $id
+     * @param $field
+     * @param $count
+     */
+    public function dec($id, $field, $count = 1)
+    {
+        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+
+        $entity->updateCounters([$field => $count]);
+    }
 }

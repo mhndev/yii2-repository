@@ -56,15 +56,6 @@ use yii\mongodb\Query;
  */
 class AbstractMongoAqRepository implements iRepository
 {
-
-    const desc = 'DESC';
-    const asc  = 'ASC';
-
-
-    const PRIMARY_KEY = '_id';
-    const APPLICATION_KEY = 'id';
-
-
     /**
      * @var ActiveRecord
      */
