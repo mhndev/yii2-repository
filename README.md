@@ -155,7 +155,7 @@ interface iPostRepository extends iRepository
 }
 
 ```
-### Create a Repository
+### Create a Repository class
 
 ```php
 namespace app\repositories;
@@ -199,6 +199,9 @@ class PostRepository extends Component implements iPostRepository
 
 ```
 
+this approach is useful when toy have a class which is already extending a class
+and can't extend AbstractRepository class just like yii components
+by using traits you can use this classes as yii component.
 
 
 
