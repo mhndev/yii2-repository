@@ -123,15 +123,25 @@ trait MongoArRepositoryTrait
             throw new RepositoryException('what the f ...');
         }
 
+        $this->model = new $this->modelClass;
 
+        $this->initRepositoryParams();
+    }
+
+
+    /**
+     * @return $this
+     */
+    protected function initRepositoryParams()
+    {
         $this->columns();
         $this->orderBy(self::PRIMARY_KEY, self::desc);
 
-        $this->model = new $this->modelClass;
-        $this->connection = \Yii::$app->db;
+        $this->connection = Yii::$app->mongodb;
         $this->query = $this->model->find();
-    }
 
+        return $this;
+    }
 
     /**
      * @param $returnArray
@@ -278,9 +288,11 @@ trait MongoArRepositoryTrait
             $this->model->{$key} = $value;
         }
 
-        $this->model->save();
-
-        return $this->formatEntity($this->model);
+        if($this->model->save()){
+            return $this->formatEntity($this->model);
+        }else{
+            return $this->model->errors;
+        }
     }
 
 
@@ -317,28 +329,6 @@ trait MongoArRepositoryTrait
     }
 
 
-    /**
-     * @param $entity
-     * @return mixed
-     */
-    protected function formatEntity($entity)
-    {
-        if(in_array(self::APPLICATION_KEY, $this->model->attributes())){
-
-
-            $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY];
-
-            if($entity[self::PRIMARY_KEY] instanceof ObjectID){
-                $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY]->__toString();
-            }
-
-        }
-
-
-        unset($entity[self::PRIMARY_KEY]);
-
-        return $entity;
-    }
 
 
     /**
@@ -380,10 +370,48 @@ trait MongoArRepositoryTrait
 
 
     /**
+     * @param $entity
+     * @return mixed
+     */
+    protected function formatEntityArray($entity)
+    {
+        if(in_array(self::APPLICATION_KEY, $this->model->attributes())){
+
+
+            $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY];
+
+            if($entity[self::PRIMARY_KEY] instanceof ObjectID){
+                $entity[self::APPLICATION_KEY] = $entity[self::PRIMARY_KEY]->__toString();
+            }
+
+        }
+
+        unset($entity[self::PRIMARY_KEY]);
+
+        return $entity;
+    }
+
+
+    /**
+     * @param $entity
+     * @return mixed
+     */
+    public function formatEntity($entity)
+    {
+        if(is_array($entity)){
+            $model = $this->formatEntityArray($entity);
+        }else{
+            $model = $this->formatEntityObject($entity);
+        }
+
+        return $model;
+    }
+
+    /**
      * @param array $entities
      * @return array
      */
-    protected function formatEntitiesObject(array $entities)
+    protected function formatEntities(array $entities)
     {
         $result = [];
 
@@ -392,7 +420,7 @@ trait MongoArRepositoryTrait
 
                 unset($entity->{self::PRIMARY_KEY});
             }
-            $model = $this->formatEntityObject($entity);
+            $model = $this->formatEntity($entity);
 
             $result[] = $model;
         }
@@ -431,7 +459,7 @@ trait MongoArRepositoryTrait
 
         $this->query = $this->query->where([$operation, $key , $value])->orderBy($this->orderBy);
 
-        return $withPagination ? $this->paginate() : $this->formatEntityObject($this->query->all() );
+        return $withPagination ? $this->paginate() : $this->formatEntity($this->query->all() );
     }
 
     /**
@@ -446,8 +474,27 @@ trait MongoArRepositoryTrait
 
         $this->query = $this->query->where([self::PRIMARY_KEY=>$ids])->orderBy($this->orderBy);
 
-        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
+        return $withPagination ? $this->paginate() : $this->formatEntities($this->query->all() );
     }
+
+
+    /**
+     * @param $field
+     * @param array $values
+     * @param bool $withPagination
+     * @param bool $returnArray
+     * @return array
+     */
+    public function findManyWhereIn($field, array $values, $withPagination = true, $returnArray = false)
+    {
+        $this->initFetch($returnArray, $this->columns, $this->with);
+
+        $this->query = $this->query->where([$field => $values])->orderBy($this->orderBy);
+
+        return $withPagination ? $this->paginate() : $this->formatEntities($this->query->all() );
+    }
+
+
 
     /**
      * @param bool $withPagination
@@ -460,47 +507,32 @@ trait MongoArRepositoryTrait
 
         $this->query = $this->query->orderBy($this->orderBy);
 
-        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
+        return $withPagination ? $this->paginate() : $this->formatEntities($this->query->all() );
     }
 
 
     /**
-     * @param array $entities
      * @return array
      */
-    protected function formatEntities(array $entities)
-    {
-        $result = [];
-        foreach ($entities as $item){
-            $result[] = $this->formatEntity($item);
-        }
-
-        return $result;
-    }
-
-    /**
-     * @param int $perPage
-     * @return array
-     */
-    protected function paginate($perPage = 10)
+    protected function paginate()
     {
         $response = [];
 
         $count = $this->query->count();
 
+        $perPage = !empty($_GET['perPage']) ? $_GET['perPage'] : $this->limit;
+        $currentPage = !empty($_GET['page']) ? $_GET['page'] : 1;
         $pagination = new Pagination(['totalCount' => $count,'pageSize' => $perPage ]);
-
 
         $result = $this->query
             ->offset($pagination->offset)
             ->limit($pagination->limit)
             ->all();
 
-        $response['items'] = $this->formatEntitiesObject($result);
-
+        $response['items'] = $this->formatEntities($result);
         $response['_meta']['totalCount'] = $count;
-        $response['_meta']['pageCount'] = floor($count / $pagination->limit )+ 1;
-        $response['_meta']['currentPage'] = !empty($_GET['page']) ? $_GET['page'] : 1;
+        $response['_meta']['pageCount'] = $pagination->pageCount;
+        $response['_meta']['currentPage'] = $currentPage;
         $response['_meta']['perPage'] = $pagination->limit;
 
         $response['_links'] = $pagination->getLinks();
@@ -553,7 +585,7 @@ trait MongoArRepositoryTrait
 
         $this->query = $this->query->where($mainCriteria)->orderBy($this->orderBy);
 
-        return $withPagination ? $this->paginate() : $this->formatEntitiesObject($this->query->all() );
+        return $withPagination ? $this->paginate() : $this->formatEntities($this->query->all() );
     }
 
 
@@ -751,7 +783,6 @@ trait MongoArRepositoryTrait
         }
 
 
-
         if(!empty($search)){
             $criteria = [];
             foreach ($search as $string){
@@ -787,7 +818,8 @@ trait MongoArRepositoryTrait
      */
     public function inc($id, $field, $count = 1)
     {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+        /** @var \yii\db\ActiveRecord $entity */
+        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
 
         $entity->updateCounters([$field => $count]);
     }
@@ -799,7 +831,8 @@ trait MongoArRepositoryTrait
      */
     public function dec($id, $field, $count = 1)
     {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+        /** @var ActiveRecord $entity */
+        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
 
         $entity->updateCounters([$field => $count]);
     }

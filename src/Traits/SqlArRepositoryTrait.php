@@ -8,6 +8,7 @@
 namespace mhndev\yii2Repository\Traits;
 
 use mhndev\yii2Repository\Exceptions\RepositoryException;
+use Yii;
 use yii\data\Pagination;
 use yii\db\ActiveRecord;
 use yii\db\Connection;
@@ -128,11 +129,17 @@ trait SqlArRepositoryTrait
 
 
     /**
-     * @return ActiveRecord
+     * @return $this
      */
-    protected function makeQuery()
+    protected function initRepositoryParams()
     {
-        return $this->model;
+        $this->columns();
+        $this->orderBy(self::PRIMARY_KEY, self::desc);
+
+        $this->connection = Yii::$app->db;
+        $this->query = $this->model->find();
+
+        return $this;
     }
 
     /**
@@ -465,7 +472,7 @@ trait SqlArRepositoryTrait
      */
     public function inc($id, $field, $count = 1)
     {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->One([self::PRIMARY_KEY=>$id]);
 
         $entity->updateCounters([$field => $count]);
     }
@@ -477,7 +484,7 @@ trait SqlArRepositoryTrait
      */
     public function dec($id, $field, $count = -1)
     {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
 
         $entity->updateCounters([$field => $count]);
     }
@@ -502,7 +509,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneById($id, array $data = [])
     {
-        $entity = $this->makeQuery()->findOne([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
 
         return $this->updateEntity($entity, $data);
 
@@ -516,7 +523,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneBy($key, $value, array $data = [])
     {
-        $entity = $this->makeQuery()->findOne([ $key => $value ]);
+        $entity = $this->query->one([ $key => $value ]);
 
         return $this->updateEntity($entity, $data);
 
@@ -529,7 +536,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneByCriteria(array $criteria, array $data = [])
     {
-        $entity = $this->model->findOne($criteria);
+        $entity = $this->query->one($criteria);
 
         return $this->updateEntity($entity, $data);
     }
@@ -670,6 +677,15 @@ trait SqlArRepositoryTrait
         if(!empty($_GET['with'])){
             $with = explode(',',$_GET['with']);
             $this->with($with);
+        }
+
+
+        if(!empty($_GET['perPage'])){
+            $this->limit($_GET['perPage']);
+        }
+
+        if(!empty($_GET['page'])){
+            $this->offset($_GET['page'] * $this->limit);
         }
 
 

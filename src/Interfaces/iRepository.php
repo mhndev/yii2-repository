@@ -13,10 +13,6 @@ interface iRepository
 
     const asc  = 'ASC';
 
-    const PRIMARY_KEY = '_id';
-
-    const APPLICATION_KEY = 'id';
-
 
     /**
      * @param array $with
