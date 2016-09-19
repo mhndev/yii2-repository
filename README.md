@@ -155,7 +155,6 @@ interface iPostRepository extends iRepository
 }
 
 ```
-
 ### Create a Repository
 
 ```php
@@ -170,6 +169,38 @@ class PostRepository extends AbstractSqlArRepository implements iPostRepository
 }
 
 ```
+
+or
+
+### create a Repository as a Yii component
+
+```php
+class PostRepository extends Component implements iPostRepository
+{
+
+    const PRIMARY_KEY = 'id';
+
+    const APPLICATION_KEY = 'id';
+
+
+    use SqlArRepositoryTrait {
+        init as repositoryInit;
+    }
+
+
+    public function init()
+    {
+        parent::init();
+
+        $this->repositoryInit();
+    }
+}
+
+
+```
+
+
+
 
 if your model is using sql as it's data source and your model actually is extending yii\db\ActiveRecord
 your repository should extend mhndev\yii2Repository\AbstractSqlArRepository.
