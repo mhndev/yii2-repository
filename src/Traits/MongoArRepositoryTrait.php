@@ -763,6 +763,7 @@ trait MongoArRepositoryTrait
 
     /**
      * @return mixed
+     * @throws RepositoryException
      */
     public function searchByCriteria()
     {
@@ -782,15 +783,19 @@ trait MongoArRepositoryTrait
             $this->with($with);
         }
 
-
         if(!empty($search)){
             $criteria = [];
             foreach ($search as $string){
                 $components = explode(':', $string);
 
+                if( empty($components[0]) || empty($components[1]) || empty($components[2]) ){
+                    throw new RepositoryException('search parameters are not specified correctly.');
+                }
+
                 if($components[0] == self::APPLICATION_KEY){
                     $components[0] = self::PRIMARY_KEY;
                 }
+
                 array_push($criteria ,[$components[1],$components[0],$components[2]]);
             }
 

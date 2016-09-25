@@ -2,6 +2,11 @@ Yii2 Repository Pattern implementation
 ======================================
 Yii2 Repository Pattern implementation in Yii2
 
+you can read more about repository patterns here :
+http://deviq.com/repository-pattern/
+http://martinfowler.com/eaaCatalog/repository.html
+http://shawnmc.cool/the-repository-pattern
+http://stackoverflow.com/questions/16176990/proper-repository-pattern-design-in-php
 
 ## Table of Contents
 
@@ -319,7 +324,7 @@ Yii::$container->set('postRepository', function($container, $params, $config){
       */
      public function actionUpdate($id)
      {
-         $data = \Yii::$app->request->post();
+         $data = Yii::$app->request->post();
  
          $post = $this->postRepository->updateOneById($id, $data);
  
@@ -351,7 +356,7 @@ Yii::$container->set('postRepository', function($container, $params, $config){
       */
      public function actionDeleteMultiple()
      {
-         $ids = \Yii::$app->request->post()['ids'];
+         $ids = Yii::$app->request->post()['ids'];
  
          $deletedCount = $this->postRepository->deleteManyByIds($ids);
      }
