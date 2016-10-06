@@ -509,7 +509,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneById($id, array $data = [])
     {
-        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
 
         return $this->updateEntity($entity, $data);
 
@@ -523,7 +523,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneBy($key, $value, array $data = [])
     {
-        $entity = $this->query->one([ $key => $value ]);
+        $entity = $this->query->where([ $key => $value ])->one();
 
         return $this->updateEntity($entity, $data);
 
