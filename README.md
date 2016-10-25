@@ -103,7 +103,7 @@ to the require section of your `composer.json` file.
 
     public function dec($id, $field, $count = 1);
 ```
-
+ 
 ## Usage
 
 ### Create a Model
