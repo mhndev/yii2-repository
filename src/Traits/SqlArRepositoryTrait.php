@@ -472,7 +472,7 @@ trait SqlArRepositoryTrait
      */
     public function inc($id, $field, $count = 1)
     {
-        $entity = $this->query->One([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
 
         $entity->updateCounters([$field => $count]);
     }
@@ -484,7 +484,7 @@ trait SqlArRepositoryTrait
      */
     public function dec($id, $field, $count = -1)
     {
-        $entity = $this->query->one([self::PRIMARY_KEY=>$id]);
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
 
         $entity->updateCounters([$field => $count]);
     }
@@ -536,7 +536,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneByCriteria(array $criteria, array $data = [])
     {
-        $entity = $this->query->one($criteria);
+        $entity = $this->query->where($criteria)->one();
 
         return $this->updateEntity($entity, $data);
     }
