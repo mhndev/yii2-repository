@@ -300,7 +300,7 @@ trait SqlArRepositoryTrait
         }
 
         $this->initFetch($returnArray, $this->columns);
-        return $this->query->where([self::PRIMARY_KEY=>$id])->one();
+        return $this->query->where([self::PRIMARY_KEY=>$id])->limit(1)->one();
     }
 
     /**
@@ -317,7 +317,7 @@ trait SqlArRepositoryTrait
         }
         $this->initFetch($returnArray, $this->columns);
 
-        return $this->query->where([$operation, $key ,$value])->one();
+        return $this->query->where([$operation, $key ,$value])->limit(1)->one();
     }
 
     /**
@@ -509,7 +509,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneById($id, array $data = [])
     {
-        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->one();
+        $entity = $this->query->where([self::PRIMARY_KEY=>$id])->limit(1)->one();
 
         return $this->updateEntity($entity, $data);
 
@@ -523,7 +523,7 @@ trait SqlArRepositoryTrait
      */
     public function updateOneBy($key, $value, array $data = [])
     {
-        $entity = $this->query->where([ $key => $value ])->one();
+        $entity = $this->query->where([ $key => $value ])->limit(1)->one();
 
         return $this->updateEntity($entity, $data);
 
