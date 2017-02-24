@@ -11,9 +11,13 @@
     }
   ],
   "require": {
-    "yiisoft/yii2": "*",
-    "yiisoft/yii2-mongodb": "~2.1.0"
+    "yiisoft/yii2": "*"
   },
+
+  "suggest": {
+    "yiisoft/yii2-mongodb": "needed if you want to use mongodb as your dbms instead of relational dbms"
+  },
+
 
   "autoload": {
     "psr-4": {
