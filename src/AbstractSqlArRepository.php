@@ -48,6 +48,11 @@ use yii\db\ActiveRecord;
 class AbstractSqlArRepository implements iRepository
 {
 
+    const PRIMARY_KEY = 'id';
+
+    const APPLICATION_KEY = 'id';
+
+
     use SqlArRepositoryTrait;
 
     /**

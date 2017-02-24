@@ -47,6 +47,9 @@ use yii\mongodb\ActiveRecord;
 class AbstractMongoArRepository implements iRepository
 {
 
+    const PRIMARY_KEY = '_id';
+
+    const APPLICATION_KEY = 'id';
 
     use MongoArRepositoryTrait;
 
